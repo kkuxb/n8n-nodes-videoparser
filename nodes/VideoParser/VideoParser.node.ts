@@ -127,23 +127,29 @@ export class VideoParser implements INodeType {
 					);
 				}
 
+				// Extract data from btch-downloader response structure
+				const data = videoInfo?.result?.data || videoInfo?.data || videoInfo;
+				const links = data?.links || [];
+				const extractedVideoUrl = links.length > 0 ? links[0].url : '';
+
 				// Prepare output data
 				const outputData: INodeExecutionData = {
 					json: {
-						platform: videoInfo.platform || platform,
-						title: videoInfo.title || '',
-						author: videoInfo.author || videoInfo.username || '',
-						videoUrl: videoInfo.video_url || videoInfo.videoUrl || videoInfo.url || '',
-						coverUrl: videoInfo.cover_url || videoInfo.coverUrl || videoInfo.thumbnail || '',
-						duration: videoInfo.duration || 0,
-						description: videoInfo.description || videoInfo.caption || '',
-						tags: videoInfo.tags || videoInfo.hashtags || [],
+						platform: platform,
+						title: data?.title || '',
+						author: data?.author || data?.username || data?.nickname || '',
+						videoUrl: extractedVideoUrl,
+						coverUrl: data?.thumbnail || data?.cover_url || data?.coverUrl || '',
+						duration: data?.duration || 0,
+						description: data?.description || data?.caption || data?.desc || '',
+						tags: data?.tags || data?.hashtags || [],
 						stats: {
-							likes: videoInfo.likes || videoInfo.like_count || 0,
-							comments: videoInfo.comments || videoInfo.comment_count || 0,
-							shares: videoInfo.shares || videoInfo.share_count || 0,
-							views: videoInfo.views || videoInfo.view_count || 0,
+							likes: data?.likes || data?.like_count || data?.digg_count || 0,
+							comments: data?.comments || data?.comment_count || 0,
+							shares: data?.shares || data?.share_count || 0,
+							views: data?.views || data?.view_count || data?.play_count || 0,
 						},
+						links: links,
 						rawData: videoInfo,
 					},
 				};
