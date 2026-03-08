@@ -1,0 +1,62 @@
+{
+  "name": "n8n-nodes-videoparser",
+  "version": "1.0.0",
+  "description": "n8n 节点，用于解析和下载抖音、快手、B站等视频平台的视频",
+  "keywords": [
+    "n8n",
+    "n8n-nodes",
+    "n8n-community-node-package",
+    "video",
+    "parser",
+    "downloader",
+    "douyin",
+    "tiktok",
+    "bilibili",
+    "kuaishou"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/kkuxb/n8n-nodes-videoparser",
+  "author": {
+    "name": "kkuxb",
+    "email": ""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kkuxb/n8n-nodes-videoparser.git"
+  },
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc && gulp build:icons",
+    "dev": "tsc --watch",
+    "format": "prettier nodes --write",
+    "lint": "eslint nodes package.json",
+    "lintfix": "eslint nodes package.json --fix",
+    "prepublishOnly": "npm run build && npm run lint -c .eslintrc.prepublish.js nodes package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [],
+    "nodes": [
+      "dist/nodes/VideoParser/VideoParser.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@typescript-eslint/parser": "^5.62.0",
+    "eslint": "^8.56.0",
+    "eslint-plugin-n8n-nodes-base": "^1.16.1",
+    "gulp": "^4.0.2",
+    "n8n-workflow": "^1.0.0",
+    "prettier": "^3.2.5",
+    "typescript": "^5.3.3"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "dependencies": {
+    "btch-downloader": "^6.0.25",
+    "axios": "^1.6.7"
+  }
+}
