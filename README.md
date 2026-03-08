@@ -172,19 +172,21 @@ binary.data: video_1234567890.mp4
 
 ## 支持的平台
 
-| 平台                | 支持状态 | 示例链接                                       | 说明                    |
-| ----------------- | ---- | ------------------------------------------ | --------------------- |
-| 抖音 (Douyin)       | ✅    | `https://v.douyin.com/xxxxx/`              | 完全支持，包括分享链接和浏览器链接   |
-| TikTok            | ✅    | `https://www.tiktok.com/@user/video/xxx`   | -                     |
-| B站 (Bilibili)     | ✅    | `https://www.bilibili.com/video/BVxxx`     | -                     |
-| 快手 (Kuaishou)     | ✅    | `https://www.kuaishou.com/short-video/xxx` | -                     |
-| 小红书 (Xiaohongshu) | ⚠️   | `https://www.xiaohongshu.com/xxx`          | 当前不可用，等待上游库修复      |
-| Instagram         | ✅    | `https://www.instagram.com/p/xxx/`         | -                     |
-| Facebook          | ✅    | `https://www.facebook.com/xxx/videos/xxx`  | -                     |
-| Twitter/X         | ✅    | `https://twitter.com/user/status/xxx`      | -                     |
-| YouTube           | ✅    | `https://www.youtube.com/watch?v=xxx`      | -                     |
+| 平台                | 支持状态 | 示例链接                                       | 说明                           |
+| ----------------- | ---- | ------------------------------------------ | ---------------------------- |
+| 抖音 (Douyin)       | ✅    | `https://v.douyin.com/xxxxx/`              | 完全支持，包括分享链接和浏览器链接            |
+| TikTok            | ✅    | `https://www.tiktok.com/@user/video/xxx`   | -                            |
+| B站 (Bilibili)     | ✅    | `https://www.bilibili.com/video/BVxxx`     | -                            |
+| 快手 (Kuaishou)     | ✅    | `https://www.kuaishou.com/short-video/xxx` | -                            |
+| 小红书 (Xiaohongshu) | ✅    | `https://www.xiaohongshu.com/xxx?xsec_...` | 需要使用带参数的完整链接（分享链接或浏览器复制的链接） |
+| Instagram         | ✅    | `https://www.instagram.com/p/xxx/`         | -                            |
+| Facebook          | ✅    | `https://www.facebook.com/xxx/videos/xxx`  | -                            |
+| Twitter/X         | ✅    | `https://twitter.com/user/status/xxx`      | -                            |
+| YouTube           | ✅    | `https://www.youtube.com/watch?v=xxx`      | -                            |
 
-**注意**: 小红书平台当前由于上游解析库 (btch-downloader) 的限制暂时无法使用，我们正在跟踪该问题。其他平台均正常工作。
+**注意**:
+- 小红书平台需要使用**带参数的完整链接**才能解析成功，直接从分享功能获取的链接或从浏览器地址栏复制的完整链接均可
+- 小红书主要返回图文内容，`contentType` 为 `image`，图片数组在 `images` 字段中
 
 ## 常见问题
 
