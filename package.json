@@ -18,7 +18,7 @@
   "homepage": "https://github.com/kkuxb/n8n-nodes-videoparser",
   "author": {
     "name": "kkuxb",
-    "email": ""
+    "email": "kkuxb@example.com"
   },
   "repository": {
     "type": "git",
@@ -29,9 +29,9 @@
     "build": "tsc && gulp build:icons",
     "dev": "tsc --watch",
     "format": "prettier nodes --write",
-    "lint": "eslint nodes package.json",
-    "lintfix": "eslint nodes package.json --fix",
-    "prepublishOnly": "npm run build && npm run lint -c .eslintrc.prepublish.js nodes package.json"
+    "lint": "eslint \"nodes/**/*.ts\" package.json",
+    "lintfix": "eslint \"nodes/**/*.ts\" package.json --fix",
+    "prepublishOnly": "npm run build && eslint \"nodes/**/*.ts\" package.json -c .eslintrc.prepublish.js"
   },
   "files": [
     "dist"
