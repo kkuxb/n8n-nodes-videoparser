@@ -128,28 +128,57 @@ export class VideoParser implements INodeType {
 				}
 
 				// Extract data from btch-downloader response structure
-				const data = videoInfo?.result?.data || videoInfo?.data || videoInfo;
+				const data = videoInfo?.result?.data || videoInfo?.result || videoInfo?.data || videoInfo;
 				const links = data?.links || [];
-				const extractedVideoUrl = links.length > 0 ? links[0].url : '';
+				const downloads = data?.downloads || [];
+				const images = data?.images || [];
+
+				// Determine content type and URL
+				let extractedVideoUrl = '';
+				let contentType = 'video';
+
+				if (links.length > 0) {
+					// Standard video platforms (Douyin, TikTok, etc.)
+					extractedVideoUrl = links[0].url;
+				} else if (downloads.length > 0) {
+					// Xiaohongshu video format
+					extractedVideoUrl = downloads[0];
+				} else if (images.length > 0) {
+					// Xiaohongshu image content
+					contentType = 'image';
+					extractedVideoUrl = images[0];
+				}
+
+				// Extract engagement stats (Xiaohongshu format)
+				const engagement = data?.engagement || {};
+				const likes = engagement?.likes || data?.likes || data?.like_count || data?.digg_count || 0;
+				const comments = engagement?.comments || data?.comments || data?.comment_count || 0;
+				const collects = engagement?.collects || data?.collects || 0;
 
 				// Prepare output data
 				const outputData: INodeExecutionData = {
 					json: {
 						platform: platform,
-						title: data?.title || '',
+						contentType: contentType,
+						title: data?.title || data?.nickname || '',
 						author: data?.author || data?.username || data?.nickname || '',
-						videoUrl: extractedVideoUrl,
+						videoUrl: contentType === 'video' ? extractedVideoUrl : '',
+						imageUrl: contentType === 'image' ? extractedVideoUrl : '',
 						coverUrl: data?.thumbnail || data?.cover_url || data?.coverUrl || '',
 						duration: data?.duration || 0,
 						description: data?.description || data?.caption || data?.desc || '',
+						keywords: data?.keywords || '',
 						tags: data?.tags || data?.hashtags || [],
 						stats: {
-							likes: data?.likes || data?.like_count || data?.digg_count || 0,
-							comments: data?.comments || data?.comment_count || 0,
+							likes: typeof likes === 'string' ? parseInt(likes) || 0 : likes,
+							comments: typeof comments === 'string' ? parseInt(comments) || 0 : comments,
 							shares: data?.shares || data?.share_count || 0,
 							views: data?.views || data?.view_count || data?.play_count || 0,
+							collects: typeof collects === 'string' ? parseInt(collects) || 0 : collects,
 						},
 						links: links,
+						downloads: downloads,
+						images: images,
 						rawData: videoInfo,
 					},
 				};
@@ -176,6 +205,31 @@ export class VideoParser implements INodeType {
 						throw new NodeOperationError(
 							this.getNode(),
 							`视频下载失败: ${errorMessage}`,
+							{ itemIndex: i },
+						);
+					}
+				} else if (downloadVideo && outputData.json.imageUrl) {
+					// Download image for image-based content (e.g., Xiaohongshu)
+					try {
+						const imageResponse = await axios.get(outputData.json.imageUrl as string, {
+							responseType: 'arraybuffer',
+							timeout: 60000,
+						});
+
+						const binaryData = await this.helpers.prepareBinaryData(
+							Buffer.from(imageResponse.data),
+							`image_${Date.now()}.jpg`,
+							'image/jpeg',
+						);
+
+						outputData.binary = {
+							data: binaryData,
+						};
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						throw new NodeOperationError(
+							this.getNode(),
+							`图片下载失败: ${errorMessage}`,
 							{ itemIndex: i },
 						);
 					}

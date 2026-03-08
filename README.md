@@ -7,6 +7,7 @@
 ## 功能特性
 
 - ✅ **多平台支持**: 支持 15+ 个视频平台
+  
   - 抖音 (Douyin)
   - TikTok
   - B站 (Bilibili)
@@ -19,10 +20,15 @@
   - 等等...
 
 - ✅ **自动平台识别**: 自动检测视频链接所属平台
+
 - ✅ **无水印下载**: 获取无水印的视频下载链接
+
 - ✅ **完整元数据**: 提取视频标题、作者、封面、时长、统计数据等
+
 - ✅ **可选视频下载**: 支持自动下载视频文件为二进制数据
+
 - ✅ **轻量级**: 无需 Python、ffmpeg 等外部依赖
+
 - ✅ **开箱即用**: 安装后立即可用，无需额外配置
 
 ## 安装
@@ -55,6 +61,7 @@ n8n start
 ### 参数说明
 
 #### 视频链接
+
 - **类型**: 字符串
 - **必填**: 是
 - **说明**: 视频的分享链接
@@ -64,6 +71,7 @@ n8n start
   - B站: `https://www.bilibili.com/video/BVxxxxxxxxx`
 
 #### 平台
+
 - **类型**: 下拉选择
 - **默认值**: 自动检测
 - **选项**:
@@ -80,6 +88,7 @@ n8n start
 - **说明**: 选择视频所属平台，"自动检测"会根据 URL 自动识别
 
 #### 自动下载视频
+
 - **类型**: 布尔值
 - **默认值**: false
 - **说明**:
@@ -93,22 +102,39 @@ n8n start
 ```json
 {
   "platform": "douyin",
+  "contentType": "video",
   "title": "视频标题",
   "author": "作者名称",
   "videoUrl": "https://...",
+  "imageUrl": "",
   "coverUrl": "https://...",
   "duration": 15,
   "description": "视频描述",
+  "keywords": "关键词",
   "tags": ["标签1", "标签2"],
   "stats": {
     "likes": 1000,
     "comments": 50,
     "shares": 20,
-    "views": 5000
+    "views": 5000,
+    "collects": 100
   },
+  "links": [
+    { "quality": "Quality 1", "url": "..." },
+    { "quality": "Quality 2", "url": "..." }
+  ],
+  "images": [],
   "rawData": { /* 原始数据 */ }
 }
 ```
+
+**字段说明**:
+- `contentType`: 内容类型（`video` 或 `image`）
+- `videoUrl`: 视频下载链接（视频内容）
+- `imageUrl`: 图片链接（图文内容，如小红书）
+- `links`: 多个清晰度的视频链接数组
+- `images`: 图片数组（图文内容）
+- `collects`: 收藏数（部分平台支持）
 
 如果启用了"自动下载视频"，还会输出二进制数据：
 
@@ -146,17 +172,19 @@ binary.data: video_1234567890.mp4
 
 ## 支持的平台
 
-| 平台 | 支持状态 | 示例链接 |
-|------|---------|---------|
-| 抖音 (Douyin) | ✅ | `https://v.douyin.com/xxxxx/` |
-| TikTok | ✅ | `https://www.tiktok.com/@user/video/xxx` |
-| B站 (Bilibili) | ✅ | `https://www.bilibili.com/video/BVxxx` |
-| 快手 (Kuaishou) | ✅ | `https://www.kuaishou.com/short-video/xxx` |
-| 小红书 (Xiaohongshu) | ✅ | `https://www.xiaohongshu.com/xxx` |
-| Instagram | ✅ | `https://www.instagram.com/p/xxx/` |
-| Facebook | ✅ | `https://www.facebook.com/xxx/videos/xxx` |
-| Twitter/X | ✅ | `https://twitter.com/user/status/xxx` |
-| YouTube | ✅ | `https://www.youtube.com/watch?v=xxx` |
+| 平台                | 支持状态 | 示例链接                                       | 说明                    |
+| ----------------- | ---- | ------------------------------------------ | --------------------- |
+| 抖音 (Douyin)       | ✅    | `https://v.douyin.com/xxxxx/`              | 完全支持，包括分享链接和浏览器链接   |
+| TikTok            | ✅    | `https://www.tiktok.com/@user/video/xxx`   | -                     |
+| B站 (Bilibili)     | ✅    | `https://www.bilibili.com/video/BVxxx`     | -                     |
+| 快手 (Kuaishou)     | ✅    | `https://www.kuaishou.com/short-video/xxx` | -                     |
+| 小红书 (Xiaohongshu) | ⚠️   | `https://www.xiaohongshu.com/xxx`          | 当前不可用，等待上游库修复      |
+| Instagram         | ✅    | `https://www.instagram.com/p/xxx/`         | -                     |
+| Facebook          | ✅    | `https://www.facebook.com/xxx/videos/xxx`  | -                     |
+| Twitter/X         | ✅    | `https://twitter.com/user/status/xxx`      | -                     |
+| YouTube           | ✅    | `https://www.youtube.com/watch?v=xxx`      | -                     |
+
+**注意**: 小红书平台当前由于上游解析库 (btch-downloader) 的限制暂时无法使用，我们正在跟踪该问题。其他平台均正常工作。
 
 ## 常见问题
 
