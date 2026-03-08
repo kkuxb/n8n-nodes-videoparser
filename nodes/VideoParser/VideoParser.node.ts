@@ -208,23 +208,28 @@ export class VideoParser implements INodeType {
 							{ itemIndex: i },
 						);
 					}
-				} else if (downloadVideo && outputData.json.imageUrl) {
-					// Download image for image-based content (e.g., Xiaohongshu)
+				} else if (downloadVideo && images.length > 0) {
+					// Download all images for image-based content (e.g., Xiaohongshu)
 					try {
-						const imageResponse = await axios.get(outputData.json.imageUrl as string, {
-							responseType: 'arraybuffer',
-							timeout: 60000,
-						});
+						const binaryDataObject: { [key: string]: any } = {};
 
-						const binaryData = await this.helpers.prepareBinaryData(
-							Buffer.from(imageResponse.data),
-							`image_${Date.now()}.jpg`,
-							'image/jpeg',
-						);
+						for (let imgIndex = 0; imgIndex < images.length; imgIndex++) {
+							const imageUrl = images[imgIndex];
+							const imageResponse = await axios.get(imageUrl, {
+								responseType: 'arraybuffer',
+								timeout: 60000,
+							});
 
-						outputData.binary = {
-							data: binaryData,
-						};
+							const binaryData = await this.helpers.prepareBinaryData(
+								Buffer.from(imageResponse.data),
+								`image_${imgIndex + 1}.jpg`,
+								'image/jpeg',
+							);
+
+							binaryDataObject[`image${imgIndex + 1}`] = binaryData;
+						}
+
+						outputData.binary = binaryDataObject;
 					} catch (error) {
 						const errorMessage = error instanceof Error ? error.message : String(error);
 						throw new NodeOperationError(
