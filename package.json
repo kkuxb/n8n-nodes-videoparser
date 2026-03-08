@@ -1,24 +1,24 @@
 {
   "name": "n8n-nodes-videoparser",
   "version": "1.0.0",
-  "description": "n8n 节点，用于解析和下载抖音、快手、B站等视频平台的视频",
+  "description": "n8n 节点，用于解析和下载抖音、快手、B站、小红书等平台的视频和图文内容",
   "keywords": [
     "n8n",
     "n8n-nodes",
     "n8n-community-node-package",
-    "video",
-    "parser",
-    "downloader",
-    "douyin",
+    "视频解析",
+    "视频下载",
+    "小红书",
+    "抖音",
     "tiktok",
     "bilibili",
-    "kuaishou"
+    "快手"
   ],
   "license": "MIT",
   "homepage": "https://github.com/kkuxb/n8n-nodes-videoparser",
   "author": {
     "name": "kkuxb",
-    "email": "kkuxb@example.com"
+    "email": "maoruofan@qq.com"
   },
   "repository": {
     "type": "git",
