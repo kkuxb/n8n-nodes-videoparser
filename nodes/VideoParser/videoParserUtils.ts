@@ -18,12 +18,11 @@ export interface MediaLink {
 }
 
 export interface NormalizedVideoInfo {
-	contentType: 'video' | 'image';
+	contentType: 'video';
 	title: string;
 	author: string;
 	videoUrl: string;
 	audioUrl: string;
-	imageUrl: string;
 	coverUrl: string;
 	duration: number;
 	description: string;
@@ -38,13 +37,12 @@ export interface NormalizedVideoInfo {
 	};
 	links: MediaLink[];
 	downloads: string[];
-	images: string[];
 }
 
 type UnknownRecord = Record<string, unknown>;
 type ParserFunction = (url: string) => Promise<unknown>;
 
-const EMPTY_MEDIA_ERROR = '上游解析成功，但没有返回可下载的媒体地址';
+const EMPTY_MEDIA_ERROR = '该链接没有返回可下载的视频；图片或图文内容不受此节点支持';
 
 const PARSER_FUNCTION_NAMES: Record<DownloadPlatform, string> = {
 	douyin: 'douyin',
@@ -180,7 +178,6 @@ function baseNormalized(): NormalizedVideoInfo {
 		author: '',
 		videoUrl: '',
 		audioUrl: '',
-		imageUrl: '',
 		coverUrl: '',
 		duration: 0,
 		description: '',
@@ -195,7 +192,6 @@ function baseNormalized(): NormalizedVideoInfo {
 		},
 		links: [],
 		downloads: [],
-		images: [],
 	};
 }
 
@@ -304,16 +300,14 @@ function normalizeXiaohongshu(rawData: unknown): NormalizedVideoInfo {
 	const data = asRecord(getResultData(rawData));
 	const author = asRecord(data?.author);
 	const engagement = asRecord(data?.engagement);
-	const downloads = asStringArray(data?.downloads);
+	const links = mediaLinks(data?.downloads, 'Video');
+	const downloads = links.map((link) => link.url);
 	const images = asStringArray(data?.images);
-	const isImage = downloads.length === 0 && images.length > 0;
 	return {
 		...baseNormalized(),
-		contentType: isImage ? 'image' : 'video',
 		title: asString(data?.title),
 		author: asString(author?.nickname) || asString(data?.author),
 		videoUrl: downloads[0] || '',
-		imageUrl: isImage ? images[0] || '' : '',
 		coverUrl: images[0] || '',
 		duration: asNumber(data?.duration),
 		description: asString(data?.desc) || asString(data?.description),
@@ -325,9 +319,8 @@ function normalizeXiaohongshu(rawData: unknown): NormalizedVideoInfo {
 			views: 0,
 			collects: asNumber(engagement?.collects),
 		},
-		links: mediaLinks(downloads, 'Video'),
+		links,
 		downloads,
-		images,
 	};
 }
 
@@ -408,10 +401,34 @@ export function normalizeVideoInfo(
 		xiaohongshu: normalizeXiaohongshu,
 	};
 	const normalized = normalizers[platform](rawData);
-	if (!normalized.videoUrl && normalized.images.length === 0) {
+	if (!normalized.videoUrl) {
 		throw new Error(EMPTY_MEDIA_ERROR);
 	}
 	return normalized;
+}
+
+export function assertVideoSourceUrl(platform: DownloadPlatform, url: string): void {
+	const parsed = parseHttpUrl(url);
+	const hostname = parsed.hostname.toLowerCase();
+	const pathname = parsed.pathname.toLowerCase();
+
+	if (platform === 'tiktok' && /(?:^|\/)photo(?:\/|$)/.test(pathname)) {
+		throw new Error('TikTok 图文链接不受支持，请输入视频链接');
+	}
+
+	if (platform === 'instagram' && !/^\/(?:reel|reels|tv)(?:\/|$)/.test(pathname)) {
+		throw new Error('Instagram 仅支持 Reels/TV 视频链接，不支持图片帖');
+	}
+
+	if (platform === 'facebook' && hostname !== 'fb.watch') {
+		const isVideoPath =
+			/^\/(?:watch|reel|reels|video\.php)(?:\/|$)/.test(pathname) ||
+			/^\/share\/(?:r|v)(?:\/|$)/.test(pathname) ||
+			/\/videos(?:\/|$)/.test(pathname);
+		if (!isVideoPath) {
+			throw new Error('Facebook 仅支持 Watch、Reels 或 videos 视频链接');
+		}
+	}
 }
 
 export async function parseVideo(
@@ -420,6 +437,7 @@ export async function parseVideo(
 ): Promise<{ platform: DownloadPlatform; normalized: NormalizedVideoInfo; rawData: unknown }> {
 	parseHttpUrl(url);
 	const platform = selectedPlatform === 'auto' ? detectPlatform(url) : selectedPlatform;
+	assertVideoSourceUrl(platform, url);
 
 	const parser = PARSER_FUNCTIONS[platform];
 	let rawData = await parser(url);
@@ -481,4 +499,26 @@ export function assertSafeMediaUrl(value: string): void {
 		/^fe[89ab][0-9a-f:]+$/i.test(hostname) ||
 		isPrivateIpv4(hostname);
 	if (blockedHostname) throw new Error('出于安全原因，拒绝下载本地或私有网络地址');
+}
+
+export function resolveVideoMimeType(
+	contentType: string | undefined,
+	contentDisposition: string | undefined,
+	mediaUrl: string,
+): string {
+	const mimeType = (contentType || '').split(';')[0].trim().toLowerCase();
+	if (mimeType.startsWith('video/')) return mimeType;
+
+	const isBinaryStream =
+		mimeType === 'application/octet-stream' || mimeType === 'binary/octet-stream';
+	const evidence = `${contentDisposition || ''} ${mediaUrl}`;
+	const extension = evidence.match(/\.(mp4|webm|mov|m4v)(?:["';?&\s]|$)/i)?.[1].toLowerCase();
+	if (isBinaryStream && extension) {
+		if (extension === 'webm') return 'video/webm';
+		if (extension === 'mov') return 'video/quicktime';
+		if (extension === 'm4v') return 'video/x-m4v';
+		return 'video/mp4';
+	}
+
+	throw new Error(`下载地址返回的不是视频内容（${mimeType || '未知类型'}）`);
 }

@@ -1,6 +1,6 @@
 # n8n-nodes-videoparser
 
-一个用于解析和下载公开社交媒体内容的 n8n 社区节点。当前版本支持抖音、TikTok、Instagram、Facebook、Twitter/X、YouTube、快手和小红书，并将不同平台的返回结果统一为一致的数据结构。
+一个用于解析和下载公开社交平台视频的 n8n 社区节点。当前版本支持抖音、TikTok、Instagram Reels、Facebook、Twitter/X、YouTube、快手和小红书，并将不同平台的返回结果统一为一致的数据结构。图片和图文内容不受支持。
 
 > 本项目只应用于你有权访问和下载的公开内容。请遵守对应平台的服务条款、版权规则和当地法律。
 
@@ -9,23 +9,24 @@
 | 平台 | 解析元数据 | 获取媒体地址 | 自动下载 | 备注 |
 | --- | --- | --- | --- | --- |
 | 抖音 | ✅ | ✅ | ✅ | 支持分享链接和网页链接 |
-| TikTok | ✅ | ✅ | ✅ | 支持视频及音频地址 |
-| Instagram | 部分 | ✅ | ✅ | 上游通常只返回媒体和缩略图 |
-| Facebook | 部分 | ✅ | ✅ | 支持 HD/普通清晰度 |
+| TikTok | ✅ | ✅ | ✅ | 支持视频及音频地址；`/photo/` 图文链接会报错 |
+| Instagram Reels/TV | 部分 | ✅ | ✅ | 不支持 `/p/` 图片帖 |
+| Facebook | 部分 | ✅ | ✅ | 仅接受 Watch、Reels、videos 等明确视频链接 |
 | Twitter/X | ✅ | ✅ | ✅ | 媒体 CDN 在部分网络环境下可能不可达 |
 | YouTube | ✅ | ✅ | ✅ | 返回 MP4 和 MP3 地址 |
 | 快手 | ✅ | ✅ | ✅ | 从 v1.0.2 开始支持 |
-| 小红书 | ✅ | ✅ | ✅ | 支持视频和多图笔记 |
+| 小红书 | ✅ | ✅ | ✅ | 仅支持视频笔记；图文笔记会报错 |
 
 支持情况会受到平台风控、地区限制、内容权限以及上游解析服务状态影响。私密、付费、已删除或需要登录的内容不在支持范围内。
 
-## v1.0.2 主要改进
+## v1.0.3 主要改进
 
 - 将 `btch-downloader` 固定升级到 `6.0.38`
 - 修正 TikTok、Instagram、Facebook 的 SDK 函数映射
 - 为每个平台增加独立的返回结构适配器
 - 新增快手解析和下载
-- 兼容新版小红书作者、互动数据和多图结构
+- 兼容小红书新版 `{ quality, url }` 视频下载结构
+- 严格拒绝图片、图文帖和非视频下载响应
 - 自动检测时返回实际识别的平台，不再返回 `auto`
 - 对上游的失败响应和空媒体结果抛出明确错误
 - 使用流式下载，单个媒体文件限制为 250 MiB
@@ -53,7 +54,7 @@ npm install n8n-nodes-videoparser
 ## 使用方法
 
 1. 在工作流中添加 **Video Parser** 节点。
-2. 在“视频链接”中填写公开媒体 URL。
+2. 在“视频链接”中填写公开视频 URL。
 3. 平台保持“自动检测”，或手动选择平台。
 4. 如果需要把文件写入 n8n 二进制数据，开启“自动下载视频”。
 5. 执行节点并将输出连接到存储、数据库或其他后续节点。
@@ -62,9 +63,9 @@ npm install n8n-nodes-videoparser
 
 | 参数 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| 视频链接 | String | 空 | 必填，公开的 HTTP/HTTPS 媒体链接 |
+| 视频链接 | String | 空 | 必填，公开的 HTTP/HTTPS 视频链接 |
 | 平台 | Options | 自动检测 | 根据 URL 域名识别，也可以手动指定 |
-| 自动下载视频 | Boolean | `false` | 下载视频或小红书全部图片并输出到 `binary` |
+| 自动下载视频 | Boolean | `false` | 下载视频并输出到 `binary.data` |
 
 自动下载使用 60 秒请求超时和 250 MiB 单文件上限。超出限制时节点会失败，不会把超大文件完整载入内存。
 
@@ -78,7 +79,6 @@ npm install n8n-nodes-videoparser
   "author": "作者名称",
   "videoUrl": "https://.../video.mp4",
   "audioUrl": "https://.../audio.mp3",
-  "imageUrl": "",
   "coverUrl": "https://.../cover.jpg",
   "duration": 15000,
   "description": "内容描述",
@@ -95,19 +95,11 @@ npm install n8n-nodes-videoparser
     { "quality": "HD", "url": "https://..." }
   ],
   "downloads": [],
-  "images": [],
   "rawData": {}
 }
 ```
 
-字段可用性取决于上游平台。例如 Instagram 和 Facebook 通常不会提供完整作者或互动数据。对于小红书图文笔记：
-
-- `contentType` 为 `image`
-- 第一张图片在 `imageUrl`
-- 全部图片在 `images`
-- 开启自动下载后，二进制输出为 `binary.image1`、`binary.image2` 等
-
-对于视频内容，自动下载的文件位于 `binary.data`。
+字段可用性取决于上游平台。例如 Instagram 和 Facebook 通常不会提供完整作者或互动数据。小红书图文笔记等非视频内容会直接报错；自动下载的视频文件位于 `binary.data`。
 
 ## 支持的 URL 域名
 
@@ -115,8 +107,8 @@ npm install n8n-nodes-videoparser
 
 - 抖音：`douyin.com`、`iesdouyin.com`
 - TikTok：`tiktok.com`、`vm.tiktok.com`、`vt.tiktok.com`
-- Instagram：`instagram.com`、`instagr.am`
-- Facebook：`facebook.com`、`fb.watch`
+- Instagram Reels/TV：`instagram.com`、`instagr.am`
+- Facebook Watch/Reels/videos：`facebook.com`、`fb.watch`
 - Twitter/X：`twitter.com`、`x.com`
 - YouTube：`youtube.com`、`youtu.be`、`youtube-nocookie.com`
 - 快手：`kuaishou.com`、`v.kuaishou.com`
@@ -172,17 +164,24 @@ npm run format      # 格式化 TypeScript 源码
 
 ## 更新日志
 
+### v1.0.3 (2026-08-03)
+
+- 兼容小红书 `{ quality, url }[]` 格式的视频下载地址
+- 节点改为严格的视频模式，拒绝图片、图文帖和非视频响应
+- 限制 Instagram、TikTok 和 Facebook 的非视频入口
+- 同步更新节点描述、README 和回归测试
+
 ### v1.0.2 (2026-08-03)
 
 - 升级 `btch-downloader` 到 `6.0.38`
 - 修复各平台 SDK 函数名和返回结构适配
-- 新增快手支持并更新小红书结构
+- 新增快手支持并更新小红书基础结构
 - 增加流式下载、大小限制和媒体 URL 安全校验
 - 增加离线单元测试并修正文档支持范围
 
 ### v1.0.1 (2026-03-08)
 
-- 小红书图文内容支持下载全部图片
+- 小红书解析适配修复
 
 ### v1.0.0 (2026-03-08)
 

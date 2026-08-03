@@ -5,10 +5,12 @@ const test = require('node:test');
 
 const {
 	assertSafeMediaUrl,
+	assertVideoSourceUrl,
 	detectPlatform,
 	getParserFunctionName,
 	normalizeVideoInfo,
 	parseVideo,
+	resolveVideoMimeType,
 } = require('../dist/nodes/VideoParser/videoParserUtils');
 
 test('uses the function names exported by btch-downloader 6.0.38', () => {
@@ -112,7 +114,7 @@ test('normalizes Twitter and YouTube response variants', () => {
 	assert.equal(youtube.author, 'Creator');
 });
 
-test('normalizes Kuaishou metadata and Xiaohongshu author objects', () => {
+test('normalizes Kuaishou metadata and Xiaohongshu video download objects', () => {
 	const kuaishou = normalizeVideoInfo('kuaishou', {
 		status: true,
 		result: {
@@ -136,15 +138,16 @@ test('normalizes Kuaishou metadata and Xiaohongshu author objects', () => {
 			author: { nickname: 'Rednote creator' },
 			title: 'Rednote title',
 			desc: 'Description',
-			images: ['https://cdn.example/xhs-1.jpg', 'https://cdn.example/xhs-2.jpg'],
-			downloads: [],
+			images: ['https://cdn.example/xhs-cover.jpg'],
+			downloads: [{ quality: 'HD', url: 'https://cdn.example/xhs.mp4' }],
 			engagement: { likes: 10, comments: 2, shares: 1, collects: 4 },
 		},
 	});
-	assert.equal(xiaohongshu.contentType, 'image');
+	assert.equal(xiaohongshu.contentType, 'video');
 	assert.equal(xiaohongshu.author, 'Rednote creator');
-	assert.equal(xiaohongshu.imageUrl, 'https://cdn.example/xhs-1.jpg');
-	assert.equal(xiaohongshu.images.length, 2);
+	assert.equal(xiaohongshu.videoUrl, 'https://cdn.example/xhs.mp4');
+	assert.equal(xiaohongshu.coverUrl, 'https://cdn.example/xhs-cover.jpg');
+	assert.equal(xiaohongshu.links[0].quality, 'HD');
 	assert.equal(xiaohongshu.stats.collects, 4);
 });
 
@@ -155,7 +158,64 @@ test('turns resolved upstream failures and empty results into errors', () => {
 	);
 	assert.throws(
 		() => normalizeVideoInfo('youtube', { status: true, mp4: null }),
-		/没有返回可下载的媒体地址/,
+		/没有返回可下载的视频/,
+	);
+	assert.throws(
+		() =>
+			normalizeVideoInfo('xiaohongshu', {
+				status: true,
+				result: {
+					images: ['https://cdn.example/xhs-image.jpg'],
+					downloads: [],
+				},
+			}),
+		/图片或图文内容不受此节点支持/,
+	);
+});
+
+test('rejects source URLs that identify non-video posts', () => {
+	assert.doesNotThrow(() =>
+		assertVideoSourceUrl('instagram', 'https://www.instagram.com/reel/example/'),
+	);
+	assert.doesNotThrow(() => assertVideoSourceUrl('facebook', 'https://fb.watch/example/'));
+	assert.doesNotThrow(() =>
+		assertVideoSourceUrl('facebook', 'https://www.facebook.com/user/videos/123/'),
+	);
+	assert.throws(
+		() => assertVideoSourceUrl('instagram', 'https://www.instagram.com/p/example/'),
+		/不支持图片帖/,
+	);
+	assert.throws(
+		() => assertVideoSourceUrl('tiktok', 'https://www.tiktok.com/@creator/photo/123'),
+		/TikTok 图文链接不受支持/,
+	);
+	assert.throws(
+		() => assertVideoSourceUrl('facebook', 'https://www.facebook.com/photo/123'),
+		/仅支持 Watch、Reels 或 videos/,
+	);
+});
+
+test('accepts verified video responses and rejects image or HTML downloads', () => {
+	assert.equal(resolveVideoMimeType('video/mp4', undefined, 'https://cdn.example/data'), 'video/mp4');
+	assert.equal(
+		resolveVideoMimeType(
+			'application/octet-stream',
+			'attachment; filename="instagram.mp4"',
+			'https://cdn.example/data',
+		),
+		'video/mp4',
+	);
+	assert.equal(
+		resolveVideoMimeType('binary/octet-stream', undefined, 'https://cdn.example/video.webm?x=1'),
+		'video/webm',
+	);
+	assert.throws(
+		() => resolveVideoMimeType('image/jpeg', undefined, 'https://cdn.example/image.jpg'),
+		/不是视频内容/,
+	);
+	assert.throws(
+		() => resolveVideoMimeType('text/html', undefined, 'https://cdn.example/error'),
+		/不是视频内容/,
 	);
 });
 

@@ -11,21 +11,24 @@ import {
 	NodeOperationError,
 } from 'n8n-workflow';
 
-import { assertSafeMediaUrl, parseVideo, SelectablePlatform } from './videoParserUtils';
+import {
+	assertSafeMediaUrl,
+	parseVideo,
+	resolveVideoMimeType,
+	SelectablePlatform,
+} from './videoParserUtils';
 
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 const MAX_DOWNLOAD_BYTES = 250 * 1024 * 1024;
 
 function fileExtension(mimeType: string): string {
 	const extensions: Record<string, string> = {
-		'image/jpeg': 'jpg',
-		'image/png': 'png',
-		'image/webp': 'webp',
-		'image/gif': 'gif',
 		'video/mp4': 'mp4',
 		'video/webm': 'webm',
+		'video/quicktime': 'mov',
+		'video/x-m4v': 'm4v',
 	};
-	return extensions[mimeType] || (mimeType.startsWith('image/') ? 'jpg' : 'mp4');
+	return extensions[mimeType] || 'mp4';
 }
 
 function limitStream(source: Readable, maxBytes: number): Readable {
@@ -47,7 +50,6 @@ async function downloadBinary(
 	context: IExecuteFunctions,
 	url: string,
 	filePrefix: string,
-	fallbackMimeType: string,
 ): Promise<IBinaryData> {
 	assertSafeMediaUrl(url);
 
@@ -73,9 +75,19 @@ async function downloadBinary(
 		throw new Error(`媒体文件超过 ${Math.round(MAX_DOWNLOAD_BYTES / 1024 / 1024)} MiB 下载上限`);
 	}
 
-	const mimeType = String(response.headers['content-type'] || fallbackMimeType)
-		.split(';')[0]
-		.trim();
+	const contentType = response.headers['content-type'];
+	const contentDisposition = response.headers['content-disposition'];
+	let mimeType: string;
+	try {
+		mimeType = resolveVideoMimeType(
+			typeof contentType === 'string' ? contentType : undefined,
+			typeof contentDisposition === 'string' ? contentDisposition : undefined,
+			url,
+		);
+	} catch (error) {
+		response.data.destroy();
+		throw error;
+	}
 	const fileName = `${filePrefix}_${Date.now()}.${fileExtension(mimeType)}`;
 	return context.helpers.prepareBinaryData(
 		limitStream(response.data, MAX_DOWNLOAD_BYTES),
@@ -92,7 +104,7 @@ export class VideoParser implements INodeType {
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["platform"]}}',
-		description: '解析和下载抖音、TikTok、小红书等平台的公开媒体',
+		description: '解析和下载抖音、TikTok、小红书等平台的公开视频',
 		defaults: {
 			name: 'Video Parser',
 		},
@@ -107,7 +119,7 @@ export class VideoParser implements INodeType {
 				required: true,
 				placeholder: 'https://v.douyin.com/xxxxx/',
 				description:
-					'公开媒体链接，支持抖音、TikTok、Instagram、Facebook、X、YouTube、快手和小红书',
+					'公开视频链接，支持抖音、TikTok、Instagram Reels、Facebook、X、YouTube、快手和小红书',
 			},
 			{
 				displayName: '平台',
@@ -127,7 +139,7 @@ export class VideoParser implements INodeType {
 						value: 'tiktok',
 					},
 					{
-						name: 'Instagram',
+						name: 'Instagram Reels',
 						value: 'instagram',
 					},
 					{
@@ -152,14 +164,14 @@ export class VideoParser implements INodeType {
 					},
 				],
 				default: 'auto',
-				description: '选择媒体平台；自动检测会根据 URL 域名识别',
+				description: '选择视频平台；自动检测会根据 URL 域名识别',
 			},
 			{
 				displayName: '自动下载视频',
 				name: 'downloadVideo',
 				type: 'boolean',
 				default: false,
-				description: '是否以流式方式下载媒体并输出为二进制数据；单个文件上限为 250 MiB',
+				description: '是否以流式方式下载视频并输出为二进制数据；单个文件上限为 250 MiB',
 			},
 		],
 	};
@@ -192,7 +204,6 @@ export class VideoParser implements INodeType {
 						author: normalized.author,
 						videoUrl: normalized.videoUrl,
 						audioUrl: normalized.audioUrl,
-						imageUrl: normalized.imageUrl,
 						coverUrl: normalized.coverUrl,
 						duration: normalized.duration,
 						description: normalized.description,
@@ -201,26 +212,14 @@ export class VideoParser implements INodeType {
 						stats: { ...normalized.stats },
 						links: normalized.links.map((link) => ({ ...link })),
 						downloads: normalized.downloads,
-						images: normalized.images,
 						rawData: rawData as IDataObject,
 					},
 				};
 
 				if (shouldDownload && normalized.videoUrl) {
 					outputData.binary = {
-						data: await downloadBinary(this, normalized.videoUrl, 'video', 'video/mp4'),
+						data: await downloadBinary(this, normalized.videoUrl, 'video'),
 					};
-				} else if (shouldDownload && normalized.images.length > 0) {
-					const binaryImages: Record<string, IBinaryData> = {};
-					for (let imageIndex = 0; imageIndex < normalized.images.length; imageIndex++) {
-						binaryImages[`image${imageIndex + 1}`] = await downloadBinary(
-							this,
-							normalized.images[imageIndex],
-							`image_${imageIndex + 1}`,
-							'image/jpeg',
-						);
-					}
-					outputData.binary = binaryImages;
 				}
 
 				returnData.push(outputData);
