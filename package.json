@@ -1,7 +1,7 @@
 {
   "name": "n8n-nodes-videoparser",
-  "version": "1.0.1",
-  "description": "n8n 节点，用于解析和下载抖音、快手、B站、小红书等平台的视频和图文内容",
+  "version": "1.0.2",
+  "description": "n8n 节点，用于解析和下载抖音、TikTok、快手、小红书等平台的公开媒体内容",
   "keywords": [
     "n8n",
     "n8n-nodes",
@@ -11,7 +11,8 @@
     "小红书",
     "抖音",
     "tiktok",
-    "bilibili",
+    "youtube",
+    "instagram",
     "快手"
   ],
   "license": "MIT",
@@ -31,6 +32,7 @@
     "format": "prettier nodes --write",
     "lint": "eslint \"nodes/**/*.ts\" package.json",
     "lintfix": "eslint \"nodes/**/*.ts\" package.json --fix",
+    "test": "npm run build && node --test tests/*.test.js",
     "prepublishOnly": "npm run build && eslint \"nodes/**/*.ts\" package.json -c .eslintrc.prepublish.js"
   },
   "files": [
@@ -56,7 +58,7 @@
     "n8n-workflow": "*"
   },
   "dependencies": {
-    "btch-downloader": "^6.0.25",
-    "axios": "^1.6.7"
+    "axios": "1.19.0",
+    "btch-downloader": "6.0.38"
   }
 }

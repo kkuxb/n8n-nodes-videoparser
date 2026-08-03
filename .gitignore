@@ -32,9 +32,8 @@ Thumbs.db
 # Documentation (internal use only)
 docs/
 
-# Test files
+# Ad-hoc test files
 test-*.js
-*.test.js
 *.spec.js
 
 # Temporary files
