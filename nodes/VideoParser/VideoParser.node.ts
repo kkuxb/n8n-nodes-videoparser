@@ -1,4 +1,9 @@
+import { Readable, Transform } from 'stream';
+
+import axios from 'axios';
 import {
+	IBinaryData,
+	IDataObject,
 	IExecuteFunctions,
 	INodeExecutionData,
 	INodeType,
@@ -6,10 +11,90 @@ import {
 	NodeOperationError,
 } from 'n8n-workflow';
 
-import axios from 'axios';
+import {
+	assertSafeMediaUrl,
+	parseVideo,
+	resolveVideoMimeType,
+	SelectablePlatform,
+} from './videoParserUtils';
 
-// Import btch-downloader functions
-const btchDownloader = require('btch-downloader');
+const DOWNLOAD_TIMEOUT_MS = 60_000;
+const MAX_DOWNLOAD_BYTES = 250 * 1024 * 1024;
+
+function fileExtension(mimeType: string): string {
+	const extensions: Record<string, string> = {
+		'video/mp4': 'mp4',
+		'video/webm': 'webm',
+		'video/quicktime': 'mov',
+		'video/x-m4v': 'm4v',
+	};
+	return extensions[mimeType] || 'mp4';
+}
+
+function limitStream(source: Readable, maxBytes: number): Readable {
+	let receivedBytes = 0;
+	const limiter = new Transform({
+		transform(chunk: Buffer, _encoding, callback) {
+			receivedBytes += chunk.length;
+			if (receivedBytes > maxBytes) {
+				callback(new Error(`媒体文件超过 ${Math.round(maxBytes / 1024 / 1024)} MiB 下载上限`));
+				return;
+			}
+			callback(null, chunk);
+		},
+	});
+	return source.pipe(limiter);
+}
+
+async function downloadBinary(
+	context: IExecuteFunctions,
+	url: string,
+	filePrefix: string,
+): Promise<IBinaryData> {
+	assertSafeMediaUrl(url);
+
+	const response = await axios.get<Readable>(url, {
+		responseType: 'stream',
+		timeout: DOWNLOAD_TIMEOUT_MS,
+		maxRedirects: 5,
+		maxContentLength: MAX_DOWNLOAD_BYTES,
+		beforeRedirect: (options) => {
+			const protocol = options.protocol || 'https:';
+			const hostname = options.hostname || options.host;
+			if (hostname) assertSafeMediaUrl(`${protocol}//${hostname}`);
+		},
+		headers: {
+			'User-Agent':
+				'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/138 Safari/537.36',
+		},
+	});
+
+	const contentLength = Number(response.headers['content-length'] || 0);
+	if (contentLength > MAX_DOWNLOAD_BYTES) {
+		response.data.destroy();
+		throw new Error(`媒体文件超过 ${Math.round(MAX_DOWNLOAD_BYTES / 1024 / 1024)} MiB 下载上限`);
+	}
+
+	const contentType = response.headers['content-type'];
+	const contentDisposition = response.headers['content-disposition'];
+	let mimeType: string;
+	try {
+		mimeType = resolveVideoMimeType(
+			typeof contentType === 'string' ? contentType : undefined,
+			typeof contentDisposition === 'string' ? contentDisposition : undefined,
+			url,
+		);
+	} catch (error) {
+		response.data.destroy();
+		throw error;
+	}
+	const fileName = `${filePrefix}_${Date.now()}.${fileExtension(mimeType)}`;
+	return context.helpers.prepareBinaryData(
+		limitStream(response.data, MAX_DOWNLOAD_BYTES),
+		fileName,
+		mimeType,
+	);
+}
 
 export class VideoParser implements INodeType {
 	description: INodeTypeDescription = {
@@ -18,8 +103,8 @@ export class VideoParser implements INodeType {
 		icon: 'file:videoparser.svg',
 		group: ['transform'],
 		version: 1,
-		subtitle: '={{$parameter["operation"]}}',
-		description: '解析和下载抖音、快手、B站等视频平台的视频',
+		subtitle: '={{$parameter["platform"]}}',
+		description: '解析和下载抖音、TikTok、小红书等平台的公开视频',
 		defaults: {
 			name: 'Video Parser',
 		},
@@ -33,7 +118,8 @@ export class VideoParser implements INodeType {
 				default: '',
 				required: true,
 				placeholder: 'https://v.douyin.com/xxxxx/',
-				description: '视频分享链接（支持抖音、快手、B站、TikTok等平台）',
+				description:
+					'公开视频链接，支持抖音、TikTok、Instagram Reels、Facebook、X、YouTube、快手和小红书',
 			},
 			{
 				displayName: '平台',
@@ -53,7 +139,7 @@ export class VideoParser implements INodeType {
 						value: 'tiktok',
 					},
 					{
-						name: 'Instagram',
+						name: 'Instagram Reels',
 						value: 'instagram',
 					},
 					{
@@ -69,10 +155,6 @@ export class VideoParser implements INodeType {
 						value: 'youtube',
 					},
 					{
-						name: 'Bilibili',
-						value: 'bilibili',
-					},
-					{
 						name: 'Kuaishou',
 						value: 'kuaishou',
 					},
@@ -82,14 +164,14 @@ export class VideoParser implements INodeType {
 					},
 				],
 				default: 'auto',
-				description: '选择视频平台（自动检测会根据URL自动识别）',
+				description: '选择视频平台；自动检测会根据 URL 域名识别',
 			},
 			{
 				displayName: '自动下载视频',
 				name: 'downloadVideo',
 				type: 'boolean',
 				default: false,
-				description: '是否自动下载视频文件（下载后作为二进制数据输出）',
+				description: '是否以流式方式下载视频并输出为二进制数据；单个文件上限为 250 MiB',
 			},
 		],
 	};
@@ -101,210 +183,60 @@ export class VideoParser implements INodeType {
 		for (let i = 0; i < items.length; i++) {
 			try {
 				const videoUrl = this.getNodeParameter('videoUrl', i) as string;
-				const platform = this.getNodeParameter('platform', i) as string;
-				const downloadVideo = this.getNodeParameter('downloadVideo', i) as boolean;
+				const selectedPlatform = this.getNodeParameter('platform', i) as
+					| SelectablePlatform
+					| 'auto';
+				const shouldDownload = this.getNodeParameter('downloadVideo', i) as boolean;
 
-				if (!videoUrl) {
+				if (!videoUrl.trim()) {
 					throw new NodeOperationError(this.getNode(), '视频链接不能为空', { itemIndex: i });
 				}
 
-				// Parse video based on platform
-				let videoInfo: any;
-
-				if (platform === 'auto') {
-					// Auto-detect platform from URL
-					videoInfo = await detectAndParse(videoUrl);
-				} else {
-					// Use specified platform
-					videoInfo = await parseByPlatform(videoUrl, platform);
-				}
-
-				if (!videoInfo) {
-					throw new NodeOperationError(
-						this.getNode(),
-						`无法解析视频链接: ${videoUrl}`,
-						{ itemIndex: i },
-					);
-				}
-
-				// Extract data from btch-downloader response structure
-				const data = videoInfo?.result?.data || videoInfo?.result || videoInfo?.data || videoInfo;
-				const links = data?.links || [];
-				const downloads = data?.downloads || [];
-				const images = data?.images || [];
-
-				// Determine content type and URL
-				let extractedVideoUrl = '';
-				let contentType = 'video';
-
-				if (links.length > 0) {
-					// Standard video platforms (Douyin, TikTok, etc.)
-					extractedVideoUrl = links[0].url;
-				} else if (downloads.length > 0) {
-					// Xiaohongshu video format
-					extractedVideoUrl = downloads[0];
-				} else if (images.length > 0) {
-					// Xiaohongshu image content
-					contentType = 'image';
-					extractedVideoUrl = images[0];
-				}
-
-				// Extract engagement stats (Xiaohongshu format)
-				const engagement = data?.engagement || {};
-				const likes = engagement?.likes || data?.likes || data?.like_count || data?.digg_count || 0;
-				const comments = engagement?.comments || data?.comments || data?.comment_count || 0;
-				const collects = engagement?.collects || data?.collects || 0;
-
-				// Prepare output data
+				const { platform, normalized, rawData } = await parseVideo(
+					videoUrl.trim(),
+					selectedPlatform,
+				);
 				const outputData: INodeExecutionData = {
 					json: {
-						platform: platform,
-						contentType: contentType,
-						title: data?.title || data?.nickname || '',
-						author: data?.author || data?.username || data?.nickname || '',
-						videoUrl: contentType === 'video' ? extractedVideoUrl : '',
-						imageUrl: contentType === 'image' ? extractedVideoUrl : '',
-						coverUrl: data?.thumbnail || data?.cover_url || data?.coverUrl || '',
-						duration: data?.duration || 0,
-						description: data?.description || data?.caption || data?.desc || '',
-						keywords: data?.keywords || '',
-						tags: data?.tags || data?.hashtags || [],
-						stats: {
-							likes: typeof likes === 'string' ? parseInt(likes) || 0 : likes,
-							comments: typeof comments === 'string' ? parseInt(comments) || 0 : comments,
-							shares: data?.shares || data?.share_count || 0,
-							views: data?.views || data?.view_count || data?.play_count || 0,
-							collects: typeof collects === 'string' ? parseInt(collects) || 0 : collects,
-						},
-						links: links,
-						downloads: downloads,
-						images: images,
-						rawData: videoInfo,
+						platform,
+						contentType: normalized.contentType,
+						title: normalized.title,
+						author: normalized.author,
+						videoUrl: normalized.videoUrl,
+						audioUrl: normalized.audioUrl,
+						coverUrl: normalized.coverUrl,
+						duration: normalized.duration,
+						description: normalized.description,
+						keywords: normalized.keywords,
+						tags: normalized.tags,
+						stats: { ...normalized.stats },
+						links: normalized.links.map((link) => ({ ...link })),
+						downloads: normalized.downloads,
+						rawData: rawData as IDataObject,
 					},
 				};
 
-				// Download video if requested
-				if (downloadVideo && outputData.json.videoUrl) {
-					try {
-						const videoResponse = await axios.get(outputData.json.videoUrl as string, {
-							responseType: 'arraybuffer',
-							timeout: 60000, // 60 seconds timeout
-						});
-
-						const binaryData = await this.helpers.prepareBinaryData(
-							Buffer.from(videoResponse.data),
-							`video_${Date.now()}.mp4`,
-							'video/mp4',
-						);
-
-						outputData.binary = {
-							data: binaryData,
-						};
-					} catch (error) {
-						const errorMessage = error instanceof Error ? error.message : String(error);
-						throw new NodeOperationError(
-							this.getNode(),
-							`视频下载失败: ${errorMessage}`,
-							{ itemIndex: i },
-						);
-					}
-				} else if (downloadVideo && images.length > 0) {
-					// Download all images for image-based content (e.g., Xiaohongshu)
-					try {
-						const binaryDataObject: { [key: string]: any } = {};
-
-						for (let imgIndex = 0; imgIndex < images.length; imgIndex++) {
-							const imageUrl = images[imgIndex];
-							const imageResponse = await axios.get(imageUrl, {
-								responseType: 'arraybuffer',
-								timeout: 60000,
-							});
-
-							const binaryData = await this.helpers.prepareBinaryData(
-								Buffer.from(imageResponse.data),
-								`image_${imgIndex + 1}.jpg`,
-								'image/jpeg',
-							);
-
-							binaryDataObject[`image${imgIndex + 1}`] = binaryData;
-						}
-
-						outputData.binary = binaryDataObject;
-					} catch (error) {
-						const errorMessage = error instanceof Error ? error.message : String(error);
-						throw new NodeOperationError(
-							this.getNode(),
-							`图片下载失败: ${errorMessage}`,
-							{ itemIndex: i },
-						);
-					}
+				if (shouldDownload && normalized.videoUrl) {
+					outputData.binary = {
+						data: await downloadBinary(this, normalized.videoUrl, 'video'),
+					};
 				}
 
 				returnData.push(outputData);
 			} catch (error) {
+				const errorMessage = error instanceof Error ? error.message : String(error);
 				if (this.continueOnFail()) {
-					const errorMessage = error instanceof Error ? error.message : String(error);
 					returnData.push({
-						json: {
-							error: errorMessage,
-						},
-						pairedItem: {
-							item: i,
-						},
+						json: { error: errorMessage },
+						pairedItem: { item: i },
 					});
 					continue;
 				}
-				throw error;
+				if (error instanceof NodeOperationError) throw error;
+				throw new NodeOperationError(this.getNode(), errorMessage, { itemIndex: i });
 			}
 		}
 
 		return [returnData];
 	}
-
-}
-
-async function detectAndParse(url: string): Promise<any> {
-		// Try to detect platform from URL
-		if (url.includes('douyin.com') || url.includes('iesdouyin.com')) {
-			return await btchDownloader.douyin(url);
-		} else if (url.includes('tiktok.com')) {
-			return await btchDownloader.tiktok(url);
-		} else if (url.includes('instagram.com')) {
-			return await btchDownloader.instagram(url);
-		} else if (url.includes('facebook.com') || url.includes('fb.watch')) {
-			return await btchDownloader.facebook(url);
-		} else if (url.includes('twitter.com') || url.includes('x.com')) {
-			return await btchDownloader.twitter(url);
-		} else if (url.includes('youtube.com') || url.includes('youtu.be')) {
-			return await btchDownloader.youtube(url);
-		} else if (url.includes('bilibili.com')) {
-			return await btchDownloader.bilibili(url);
-		} else if (url.includes('kuaishou.com')) {
-			return await btchDownloader.kuaishou(url);
-		} else if (url.includes('xiaohongshu.com') || url.includes('xhslink.com')) {
-			return await btchDownloader.xiaohongshu(url);
-		}
-
-		throw new Error('无法识别视频平台，请手动选择平台');
-	}
-
-async function parseByPlatform(url: string, platform: string): Promise<any> {
-		const platformMap: { [key: string]: any } = {
-			douyin: btchDownloader.douyin,
-			tiktok: btchDownloader.tiktok,
-			instagram: btchDownloader.instagram,
-			facebook: btchDownloader.facebook,
-			twitter: btchDownloader.twitter,
-			youtube: btchDownloader.youtube,
-			bilibili: btchDownloader.bilibili,
-			kuaishou: btchDownloader.kuaishou,
-			xiaohongshu: btchDownloader.xiaohongshu,
-		};
-
-		const parserFunc = platformMap[platform];
-		if (!parserFunc) {
-			throw new Error(`不支持的平台: ${platform}`);
-		}
-
-		return await parserFunc(url);
 }

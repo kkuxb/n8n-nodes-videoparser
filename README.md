@@ -1,117 +1,89 @@
 # n8n-nodes-videoparser
 
-这是一个 n8n 社区节点，用于解析和下载来自多个视频平台的视频。支持抖音、快手、B站、TikTok、Instagram、YouTube 等 15+ 个视频平台。
+一个用于解析和下载公开社交平台视频的 n8n 社区节点。当前版本支持抖音、TikTok、Instagram Reels、Facebook、Twitter/X、YouTube、快手和小红书，并将不同平台的返回结果统一为一致的数据结构。图片和图文内容不受支持。
 
-[English](README_EN.md) | 简体中文
+> 本项目只应用于你有权访问和下载的公开内容。请遵守对应平台的服务条款、版权规则和当地法律。
 
-## 功能特性
+## 支持状态
 
-- ✅ **多平台支持**: 支持 15+ 个视频平台
-  
-  - 抖音 (Douyin)
-  - TikTok
-  - B站 (Bilibili)
-  - 快手 (Kuaishou)
-  - 小红书 (Xiaohongshu)
-  - Instagram
-  - Facebook
-  - Twitter/X
-  - YouTube
-  - 等等...
+| 平台 | 解析元数据 | 获取媒体地址 | 自动下载 | 备注 |
+| --- | --- | --- | --- | --- |
+| 抖音 | ✅ | ✅ | ✅ | 支持分享链接和网页链接 |
+| TikTok | ✅ | ✅ | ✅ | 支持视频及音频地址；`/photo/` 图文链接会报错 |
+| Instagram Reels/TV | 部分 | ✅ | ✅ | 不支持 `/p/` 图片帖 |
+| Facebook | 部分 | ✅ | ✅ | 仅接受 Watch、Reels、videos 等明确视频链接 |
+| Twitter/X | ✅ | ✅ | ✅ | 媒体 CDN 在部分网络环境下可能不可达 |
+| YouTube | ✅ | ✅ | ✅ | 返回 MP4 和 MP3 地址 |
+| 快手 | ✅ | ✅ | ✅ | 从 v1.0.2 开始支持 |
+| 小红书 | ✅ | ✅ | ✅ | 仅支持视频笔记；图文笔记会报错 |
 
-- ✅ **自动平台识别**: 自动检测视频链接所属平台
+支持情况会受到平台风控、地区限制、内容权限以及上游解析服务状态影响。私密、付费、已删除或需要登录的内容不在支持范围内。
 
-- ✅ **无水印下载**: 获取无水印的视频下载链接
+## v1.0.3 主要改进
 
-- ✅ **完整元数据**: 提取视频标题、作者、封面、时长、统计数据等
-
-- ✅ **可选视频下载**: 支持自动下载视频文件为二进制数据
-
-- ✅ **轻量级**: 无需 Python、ffmpeg 等外部依赖
-
-- ✅ **开箱即用**: 安装后立即可用，无需额外配置
+- 将 `btch-downloader` 固定升级到 `6.0.38`
+- 修正 TikTok、Instagram、Facebook 的 SDK 函数映射
+- 为每个平台增加独立的返回结构适配器
+- 新增快手解析和下载
+- 兼容小红书新版 `{ quality, url }` 视频下载结构
+- 严格拒绝图片、图文帖和非视频下载响应
+- 自动检测时返回实际识别的平台，不再返回 `auto`
+- 对上游的失败响应和空媒体结果抛出明确错误
+- 使用流式下载，单个媒体文件限制为 250 MiB
+- 拒绝 `file:`、本机地址和私有网络媒体地址
+- 添加离线单元测试，覆盖所有平台的响应结构
 
 ## 安装
 
-### 社区节点安装（推荐）
+### n8n 社区节点
 
-在 n8n 中，进入 **设置 > 社区节点**，搜索 `n8n-nodes-videoparser` 并安装。
+在 n8n 中进入 **设置 > 社区节点**，搜索并安装：
 
-### 手动安装
+```text
+n8n-nodes-videoparser
+```
+
+### npm 安装
 
 ```bash
 npm install n8n-nodes-videoparser
 ```
 
-安装后重启 n8n：
-
-```bash
-n8n start
-```
+安装后重启 n8n。
 
 ## 使用方法
 
-### 基础用法
+1. 在工作流中添加 **Video Parser** 节点。
+2. 在“视频链接”中填写公开视频 URL。
+3. 平台保持“自动检测”，或手动选择平台。
+4. 如果需要把文件写入 n8n 二进制数据，开启“自动下载视频”。
+5. 执行节点并将输出连接到存储、数据库或其他后续节点。
 
-1. 在 n8n 工作流中添加 **Video Parser** 节点
-2. 输入视频分享链接（例如：`https://v.douyin.com/xxxxx/`）
-3. 选择平台（或使用"自动检测"）
-4. 执行节点
+### 节点参数
 
-### 参数说明
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| 视频链接 | String | 空 | 必填，公开的 HTTP/HTTPS 视频链接 |
+| 平台 | Options | 自动检测 | 根据 URL 域名识别，也可以手动指定 |
+| 自动下载视频 | Boolean | `false` | 下载视频并输出到 `binary.data` |
 
-#### 视频链接
+自动下载使用 60 秒请求超时和 250 MiB 单文件上限。超出限制时节点会失败，不会把超大文件完整载入内存。
 
-- **类型**: 字符串
-- **必填**: 是
-- **说明**: 视频的分享链接
-- **示例**:
-  - 抖音: `https://v.douyin.com/xxxxx/`
-  - TikTok: `https://www.tiktok.com/@username/video/1234567890`
-  - B站: `https://www.bilibili.com/video/BVxxxxxxxxx`
-
-#### 平台
-
-- **类型**: 下拉选择
-- **默认值**: 自动检测
-- **选项**:
-  - 自动检测
-  - 抖音 (Douyin)
-  - TikTok
-  - Instagram
-  - Facebook
-  - Twitter/X
-  - YouTube
-  - Bilibili
-  - Kuaishou
-  - Xiaohongshu
-- **说明**: 选择视频所属平台，"自动检测"会根据 URL 自动识别
-
-#### 自动下载视频
-
-- **类型**: 布尔值
-- **默认值**: false
-- **说明**:
-  - `false`: 只返回视频信息和下载链接
-  - `true`: 自动下载视频文件，并作为二进制数据输出
-
-### 输出数据
-
-节点会返回以下信息：
+## 输出结构
 
 ```json
 {
-  "platform": "douyin",
+  "platform": "tiktok",
   "contentType": "video",
   "title": "视频标题",
   "author": "作者名称",
-  "videoUrl": "https://...",
-  "imageUrl": "",
-  "coverUrl": "https://...",
-  "duration": 15,
-  "description": "视频描述",
-  "keywords": "关键词",
-  "tags": ["标签1", "标签2"],
+  "videoUrl": "https://.../video.mp4",
+  "audioUrl": "https://.../audio.mp3",
+  "coverUrl": "https://.../cover.jpg",
+  "duration": 15000,
+  "description": "内容描述",
+  "keywords": "",
+  "tags": [],
   "stats": {
     "likes": 1000,
     "comments": 50,
@@ -120,187 +92,101 @@ n8n start
     "collects": 100
   },
   "links": [
-    { "quality": "Quality 1", "url": "..." },
-    { "quality": "Quality 2", "url": "..." }
+    { "quality": "HD", "url": "https://..." }
   ],
-  "images": [],
-  "rawData": { /* 原始数据 */ }
+  "downloads": [],
+  "rawData": {}
 }
 ```
 
-**字段说明**:
-- `contentType`: 内容类型（`video` 或 `image`）
-- `videoUrl`: 视频下载链接（视频内容）
-- `imageUrl`: 图片链接（图文内容，如小红书）
-- `links`: 多个清晰度的视频链接数组
-- `images`: 图片数组（图文内容）
-- `collects`: 收藏数（部分平台支持）
+字段可用性取决于上游平台。例如 Instagram 和 Facebook 通常不会提供完整作者或互动数据。小红书图文笔记等非视频内容会直接报错；自动下载的视频文件位于 `binary.data`。
 
-如果启用了"自动下载视频"，还会输出二进制数据：
+## 支持的 URL 域名
 
+自动检测覆盖常用主域名和短链接域名，包括：
+
+- 抖音：`douyin.com`、`iesdouyin.com`
+- TikTok：`tiktok.com`、`vm.tiktok.com`、`vt.tiktok.com`
+- Instagram Reels/TV：`instagram.com`、`instagr.am`
+- Facebook Watch/Reels/videos：`facebook.com`、`fb.watch`
+- Twitter/X：`twitter.com`、`x.com`
+- YouTube：`youtube.com`、`youtu.be`、`youtube-nocookie.com`
+- 快手：`kuaishou.com`、`v.kuaishou.com`
+- 小红书：`xiaohongshu.com`、`xhslink.com`
+
+## 实现说明
+
+本节点使用以下组件：
+
+- [`btch-downloader` 6.0.38](https://github.com/hostinger-bot/btch-downloader)：平台解析客户端
+- `axios`：媒体流式下载
+- `n8n-workflow`：n8n 节点 SDK
+
+`btch-downloader` 是远程解析服务的客户端，并非所有解析都在本机完成。输入的公开媒体 URL 会发送到其上游服务，随后返回由平台 CDN 或第三方下载 CDN 托管的媒体地址。因此：
+
+- 上游后端故障可能导致节点暂时不可用
+- 媒体地址通常有有效期，建议解析后尽快使用
+- 对隐私敏感或内部地址不要使用本节点
+- 固定依赖版本可以避免无人值守部署时出现意外的返回结构变化
+
+## 开发与测试
+
+要求 Node.js 20.18.1 或更高版本。
+
+```bash
+git clone https://github.com/kkuxb/n8n-nodes-videoparser.git
+cd n8n-nodes-videoparser
+npm install
+npm test
+npm run lint
 ```
-binary.data: video_1234567890.mp4
+
+常用命令：
+
+```bash
+npm run build       # 编译节点和复制图标
+npm test            # 构建并运行离线响应结构测试
+npm run lint        # ESLint 检查
+npm run format      # 格式化 TypeScript 源码
 ```
 
-## 使用示例
-
-### 示例 1: 解析抖音视频信息
-
-1. 添加 **Video Parser** 节点
-2. 设置参数：
-   - 视频链接: `https://v.douyin.com/ikq8axJ/`
-   - 平台: 自动检测
-   - 自动下载视频: 关闭
-3. 执行后获取视频信息（标题、作者、下载链接等）
-
-### 示例 2: 下载 TikTok 视频
-
-1. 添加 **Video Parser** 节点
-2. 设置参数：
-   - 视频链接: `https://www.tiktok.com/@username/video/1234567890`
-   - 平台: TikTok
-   - 自动下载视频: 开启
-3. 添加 **Write Binary File** 节点
-4. 连接两个节点，自动保存视频文件
-
-### 示例 3: 批量处理视频链接
-
-1. 添加 **Webhook** 或 **HTTP Request** 节点获取视频链接列表
-2. 添加 **Split In Batches** 节点
-3. 添加 **Video Parser** 节点处理每个链接
-4. 添加后续节点处理结果（保存到数据库、发送通知等）
-
-## 支持的平台
-
-| 平台                | 支持状态 | 示例链接                                       | 说明                           |
-| ----------------- | ---- | ------------------------------------------ | ---------------------------- |
-| 抖音 (Douyin)       | ✅    | `https://v.douyin.com/xxxxx/`              | 完全支持，包括分享链接和浏览器链接            |
-| TikTok            | ✅    | `https://www.tiktok.com/@user/video/xxx`   | -                            |
-| B站 (Bilibili)     | ✅    | `https://www.bilibili.com/video/BVxxx`     | -                            |
-| 快手 (Kuaishou)     | ✅    | `https://www.kuaishou.com/short-video/xxx` | -                            |
-| 小红书 (Xiaohongshu) | ✅    | `https://www.xiaohongshu.com/xxx?xsec_...` | 需要使用带参数的完整链接（分享链接或浏览器复制的链接） |
-| Instagram         | ✅    | `https://www.instagram.com/p/xxx/`         | -                            |
-| Facebook          | ✅    | `https://www.facebook.com/xxx/videos/xxx`  | -                            |
-| Twitter/X         | ✅    | `https://twitter.com/user/status/xxx`      | -                            |
-| YouTube           | ✅    | `https://www.youtube.com/watch?v=xxx`      | -                            |
-
-**注意**:
-- 小红书平台需要使用**带参数的完整链接**才能解析成功，直接从分享功能获取的链接或从浏览器地址栏复制的完整链接均可
-- 小红书主要返回图文内容，`contentType` 为 `image`，图片数组在 `images` 字段中
+测试默认不访问真实平台，避免 CI 因平台风控或上游波动而不稳定。发布前仍建议使用你有权访问的公开样例进行一次在线烟雾测试。
 
 ## 常见问题
 
-### 1. 解析失败怎么办？
+### 为什么同一个链接之前能用，现在不能用？
 
-- 确保视频链接正确且可访问
-- 尝试手动选择平台而不是使用"自动检测"
-- 检查视频是否为私密或已删除
-- 某些平台可能有反爬虫机制，可能需要等待后重试
+视频平台会调整网页结构、签名和风控规则，上游解析服务也可能暂时故障。先确认内容仍为公开状态，再检查 [`btch-downloader` Releases](https://github.com/hostinger-bot/btch-downloader/releases) 和本项目 Issues。
 
-### 2. 下载的视频有水印吗？
+### 为什么返回了地址但下载失败？
 
-大多数平台支持无水印下载，但具体取决于平台的 API 限制。
+常见原因包括媒体地址过期、当前网络无法访问对应 CDN、平台要求特定地区网络，或者媒体超过 250 MiB 上限。可以关闭自动下载，仅获取地址并交给专用下载流程处理。
 
-### 3. 支持批量下载吗？
+## 更新日志
 
-支持。可以配合 n8n 的循环节点（如 Split In Batches）实现批量处理。
+### v1.0.3 (2026-08-03)
 
-### 4. 需要 API Key 吗？
+- 兼容小红书 `{ quality, url }[]` 格式的视频下载地址
+- 节点改为严格的视频模式，拒绝图片、图文帖和非视频响应
+- 限制 Instagram、TikTok 和 Facebook 的非视频入口
+- 同步更新节点描述、README 和回归测试
 
-不需要。本节点使用开源库 `btch-downloader`，无需任何 API Key。
+### v1.0.2 (2026-08-03)
 
-### 5. 视频下载速度慢怎么办？
+- 升级 `btch-downloader` 到 `6.0.38`
+- 修复各平台 SDK 函数名和返回结构适配
+- 新增快手支持并更新小红书基础结构
+- 增加流式下载、大小限制和媒体 URL 安全校验
+- 增加离线单元测试并修正文档支持范围
 
-- 视频下载速度取决于网络环境和视频文件大小
-- 可以考虑只获取下载链接，然后使用专门的下载工具
-- 对于大文件，建议关闭"自动下载视频"选项
+### v1.0.1 (2026-03-08)
 
-## 技术细节
+- 小红书解析适配修复
 
-### 依赖项
+### v1.0.0 (2026-03-08)
 
-- `btch-downloader`: 核心视频解析库
-- `axios`: HTTP 请求库
-- `n8n-workflow`: n8n 工作流 SDK
-
-### 架构
-
-```
-n8n-nodes-videoparser/
-├── nodes/
-│   └── VideoParser/
-│       ├── VideoParser.node.ts    # 节点主逻辑
-│       └── videoparser.svg        # 节点图标
-├── package.json
-├── tsconfig.json
-└── README.md
-```
-
-## 开发
-
-### 本地开发
-
-```bash
-# 克隆仓库
-git clone https://github.com/kkuxb/n8n-nodes-videoparser.git
-cd n8n-nodes-videoparser
-
-# 安装依赖
-npm install
-
-# 构建
-npm run build
-
-# 链接到本地 n8n
-npm link
-cd ~/.n8n/nodes
-npm link n8n-nodes-videoparser
-
-# 启动 n8n
-n8n start
-```
-
-### 运行测试
-
-```bash
-npm run lint
-npm run format
-```
-
-## 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
+- 首次发布
 
 ## 许可证
 
 [MIT](LICENSE)
-
-## 致谢
-
-- [btch-downloader](https://github.com/hostinger-bot/btch-downloader) - 核心视频解析库
-- [n8n](https://n8n.io/) - 工作流自动化平台
-
-## 免责声明
-
-本工具仅供学习和研究使用。请遵守各视频平台的服务条款和版权法律。下载和使用视频内容时，请尊重原作者的版权。使用本工具产生的任何法律责任由使用者自行承担。
-
-## 支持
-
-- GitHub Issues: https://github.com/kkuxb/n8n-nodes-videoparser/issues
-- n8n 社区: https://community.n8n.io/
-
-## 更新日志
-
-### v1.0.0 (2026-03-08)
-
-- 🎉 首次发布
-- ✅ 支持 15+ 个视频平台
-- ✅ 自动平台识别
-- ✅ 可选视频下载功能
-- ✅ 完整的元数据提取
