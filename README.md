@@ -1,6 +1,6 @@
 # n8n-nodes-videoparser
 
-一个用于解析和下载公开社交平台视频的 n8n 社区节点。当前版本支持抖音、TikTok、Instagram Reels、Facebook、Twitter/X、YouTube、快手和小红书，并将不同平台的返回结果统一为一致的数据结构。图片和图文内容不受支持。
+一个用于解析和下载公开社交平台视频的 n8n 社区节点。当前版本为 **1.0.4**，支持抖音、TikTok、Instagram Reels、Facebook、Twitter/X、YouTube、快手和小红书，并将不同平台的返回结果统一为一致的数据结构。图片和图文内容不受支持。
 
 > 本项目只应用于你有权访问和下载的公开内容。请遵守对应平台的服务条款、版权规则和当地法律。
 
@@ -24,6 +24,7 @@
 - 将 `btch-downloader` 固定升级到 `6.4.0`，同步更新依赖锁文件
 - 本次上游更新涉及依赖维护、构建和发布流程；Node.js 解析接口与响应类型保持兼容
 - 延续 v1.0.3 的视频解析、下载行为和输出结构
+- 新增 release-it 发布流程，推送 Git 提交、创建版本 tag 和 GitHub Release；npm 包由维护者手动发布
 
 ## v1.0.3 主要改进
 
@@ -137,7 +138,7 @@ npm install n8n-nodes-videoparser
 
 ## 开发与测试
 
-要求 Node.js 20.18.1 或更高版本。
+开发和发布建议使用 Node.js 24.15.0 或更高的 24.x 版本，以满足 release-it 21 的运行要求。
 
 ```bash
 git clone https://github.com/kkuxb/n8n-nodes-videoparser.git
@@ -158,6 +159,29 @@ npm run format      # 格式化 TypeScript 源码
 
 测试默认不访问真实平台，避免 CI 因平台风控或上游波动而不稳定。发布前仍建议使用你有权访问的公开样例进行一次在线烟雾测试。
 
+## 维护版本发布
+
+先同步 `package.json`、`package-lock.json` 的版本号，在 README 更新当前版本和对应更新日志，并提交修改。当前分支需要配置远端上游，工作区需要保持干净。
+
+使用已登录的 GitHub CLI 提供认证，在 PowerShell 中执行：
+
+```powershell
+$env:GITHUB_TOKEN = gh auth token
+try {
+    npm run release -- --no-increment --ci
+} finally {
+    Remove-Item Env:GITHUB_TOKEN
+}
+```
+
+`--no-increment` 沿用已整理好的版本号。release-it 会运行测试、lint、发布前检查和打包预检，然后推送当前分支、创建 `v<版本号>` tag 和 GitHub Release。Release 正文取自 README 对应版本的更新日志。
+
+配置默认关闭 npm 发布。维护者确认 GitHub Release 后，在对应 tag 的源码目录中手动执行：
+
+```bash
+npm publish
+```
+
 ## 常见问题
 
 ### 为什么同一个链接之前能用，现在不能用？
@@ -175,6 +199,8 @@ npm run format      # 格式化 TypeScript 源码
 - 将 `btch-downloader` 从 `6.0.38` 固定升级到 `6.4.0`
 - 同步更新依赖锁文件和版本说明
 - 保持节点参数、平台适配和输出结构兼容
+- 新增 release-it 发布脚本与配置，自动检查并推送 Git tag 和 GitHub Release
+- GitHub Release 使用本节更新日志，npm 发布由维护者手动执行
 
 ### v1.0.3 (2026-08-03)
 
