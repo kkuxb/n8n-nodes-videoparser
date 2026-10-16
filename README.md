@@ -19,6 +19,12 @@
 
 支持情况会受到平台风控、地区限制、内容权限以及上游解析服务状态影响。私密、付费、已删除或需要登录的内容不在支持范围内。
 
+## v1.0.4 维护更新
+
+- 将 `btch-downloader` 固定升级到 `6.4.0`，同步更新依赖锁文件
+- 本次上游更新涉及依赖维护、构建和发布流程；Node.js 解析接口与响应类型保持兼容
+- 延续 v1.0.3 的视频解析、下载行为和输出结构
+
 ## v1.0.3 主要改进
 
 - 将 `btch-downloader` 固定升级到 `6.0.38`
@@ -118,7 +124,7 @@ npm install n8n-nodes-videoparser
 
 本节点使用以下组件：
 
-- [`btch-downloader` 6.0.38](https://github.com/hostinger-bot/btch-downloader)：平台解析客户端
+- [`btch-downloader` 6.4.0](https://github.com/hostinger-bot/btch-downloader)：平台解析客户端
 - `axios`：媒体流式下载
 - `n8n-workflow`：n8n 节点 SDK
 
@@ -163,6 +169,12 @@ npm run format      # 格式化 TypeScript 源码
 常见原因包括媒体地址过期、当前网络无法访问对应 CDN、平台要求特定地区网络，或者媒体超过 250 MiB 上限。可以关闭自动下载，仅获取地址并交给专用下载流程处理。
 
 ## 更新日志
+
+### v1.0.4 (2026-10-16)
+
+- 将 `btch-downloader` 从 `6.0.38` 固定升级到 `6.4.0`
+- 同步更新依赖锁文件和版本说明
+- 保持节点参数、平台适配和输出结构兼容
 
 ### v1.0.3 (2026-08-03)
 

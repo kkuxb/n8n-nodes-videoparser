@@ -13,7 +13,7 @@ const {
 	resolveVideoMimeType,
 } = require('../dist/nodes/VideoParser/videoParserUtils');
 
-test('uses the function names exported by btch-downloader 6.0.38', () => {
+test('uses the function names exported by btch-downloader 6.4.0', () => {
 	assert.equal(getParserFunctionName('douyin'), 'douyin');
 	assert.equal(getParserFunctionName('tiktok'), 'ttdl');
 	assert.equal(getParserFunctionName('instagram'), 'igdl');
