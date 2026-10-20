@@ -17,6 +17,8 @@ import {
 	resolveVideoMimeType,
 	SelectablePlatform,
 } from './videoParserUtils';
+import { downloadCandidates } from './mediaTransfer';
+import { buildXiaohongshuCandidates } from './xiaohongshuDownload';
 
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 const MAX_DOWNLOAD_BYTES = 250 * 1024 * 1024;
@@ -192,11 +194,12 @@ export class VideoParser implements INodeType {
 					throw new NodeOperationError(this.getNode(), '视频链接不能为空', { itemIndex: i });
 				}
 
-				const { platform, normalized, rawData } = await parseVideo(
+				const { platform, normalized, rawData, requestContext } = await parseVideo(
 					videoUrl.trim(),
 					selectedPlatform,
 				);
 				const outputData: INodeExecutionData = {
+					pairedItem: { item: i },
 					json: {
 						platform,
 						contentType: normalized.contentType,
@@ -217,9 +220,17 @@ export class VideoParser implements INodeType {
 				};
 
 				if (shouldDownload && normalized.videoUrl) {
-					outputData.binary = {
-						data: await downloadBinary(this, normalized.videoUrl, 'video'),
-					};
+					if (platform === 'douyin' || platform === 'xiaohongshu') {
+						const candidates =
+							platform === 'xiaohongshu'
+								? buildXiaohongshuCandidates(normalized.videoUrl)
+								: normalized.links.map(({ url }) => ({ url, source: 'official' as const }));
+						const result = await downloadCandidates(this, candidates, requestContext);
+						outputData.binary = { data: result.binary };
+						outputData.json.videoUrl = result.usedUrl;
+					} else {
+						outputData.binary = { data: await downloadBinary(this, normalized.videoUrl, 'video') };
+					}
 				}
 
 				returnData.push(outputData);

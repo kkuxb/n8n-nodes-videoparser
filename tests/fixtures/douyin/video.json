@@ -1,0 +1,11 @@
+{
+  "aweme_id": "123",
+  "desc": "Public test video",
+  "author": {"nickname": "Fixture creator"},
+  "video_control": {"allow_share": true, "allow_download": true},
+  "video": {
+    "duration": 8334,
+    "cover": {"url_list": ["https://cdn.example/cover.jpg"]},
+    "play_addr": {"url_list": ["https://cdn.example/playwm/video.mp4?sign=playwm", "https://cdn.example/playwm/video.mp4?sign=playwm"]}
+  }
+}

@@ -1,4 +1,19 @@
 import * as btchDownloader from 'btch-downloader';
+import { extractDouyinUrl, parseDouyinOfficial } from './douyinOfficial';
+import type { RequestContext } from './mediaTransfer';
+
+export type PermissionState = 'allowed' | 'denied' | 'unknown';
+export interface OfficialPermissionInfo {
+	share: PermissionState;
+	download: PermissionState;
+}
+export interface ParsedVideo {
+	platform: DownloadPlatform;
+	normalized: NormalizedVideoInfo;
+	rawData: unknown;
+	requestContext?: RequestContext;
+	permissions?: OfficialPermissionInfo;
+}
 
 export type DownloadPlatform =
 	| 'douyin'
@@ -171,7 +186,7 @@ function qualityObjectLinks(value: unknown): MediaLink[] {
 	});
 }
 
-function baseNormalized(): NormalizedVideoInfo {
+export function baseNormalized(): NormalizedVideoInfo {
 	return {
 		contentType: 'video',
 		title: '',
@@ -434,10 +449,19 @@ export function assertVideoSourceUrl(platform: DownloadPlatform, url: string): v
 export async function parseVideo(
 	url: string,
 	selectedPlatform: SelectablePlatform | 'auto',
-): Promise<{ platform: DownloadPlatform; normalized: NormalizedVideoInfo; rawData: unknown }> {
+): Promise<ParsedVideo> {
+	if (
+		selectedPlatform === 'douyin' ||
+		(selectedPlatform === 'auto' &&
+			!/^https?:\/\/\S+$/i.test(url) &&
+			/https?:\/\/[^\s/]*douyin\.com\//i.test(url))
+	) {
+		url = extractDouyinUrl(url).href;
+	}
 	parseHttpUrl(url);
 	const platform = selectedPlatform === 'auto' ? detectPlatform(url) : selectedPlatform;
 	assertVideoSourceUrl(platform, url);
+	if (platform === 'douyin') return parseDouyinOfficial(url);
 
 	const parser = PARSER_FUNCTIONS[platform];
 	let rawData = await parser(url);
